@@ -110,6 +110,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--endpoint-file", type=str, default="config/api_config.yaml"
     )
+    parser.add_argument(
+        "--new-cost-estimation", action="store_true", help="Estimate the cost of the API call") 
     args = parser.parse_args()
 
     settings = make_config(args.setting_file)
@@ -119,12 +121,50 @@ if __name__ == "__main__":
     
     print(settings)
 
+
+    # Cost Estimation
+    question_file = os.path.join("data", settings["bench_name"], "question.jsonl")
+    questions = load_questions(question_file)
+
+    runs = len(settings["model_list"])
+
+    if args.new_cost_estimation:
+        question_array = [question["turns"][0]["content"] for question in questions]
+        tokenizer = tiktoken.encoding_for_model("gpt-4o")
+        tokens = [tokenizer.encode(prompt) for prompt in question_array]
+        num_input_tokens = sum([len(token) for token in tokens])
+        num_questions = len(tokens)
+    else: 
+        num_input_tokens = 47461
+        num_questions = 500
+    
+    # gpt-4o rates
+    input_muliply = 0.005 / 1000
+    output_muliply = 0.015 / 1000
+
+    # based on the leaderboard data
+    avg_output_tokens = num_questions * 550 # AVG Answer Tokens
+    max_output_tokens = num_questions * 800 # based on the tokens for the other models 800 seems reasonable
+
+    input_cost = num_input_tokens * input_muliply
+    avg_output_cost = avg_output_tokens * output_muliply
+    max_output_cost = max_output_tokens * output_muliply
+
+    print("="*25 + "  Expected Costs (based on GPT-4o)  " + "="*25 + "\n")
+    print(f"Expected Input Tokens: \n {num_input_tokens*runs} Tokens in a total of {num_questions*runs} questions\n")
+    print(f"Expected Output Tokens: \n {avg_output_tokens*runs} Tokens in a total of {num_questions*runs} questions\n")
+    print(f"Max Output Tokens: \n {max_output_tokens*runs} Tokens in a total of {num_questions*runs} questions\n\n")
+    print("-"*25 + "  Resulting in Costs:   " + "-"*25 + "\n")
+    print(f"Expected Costs: \n {(input_cost + avg_output_cost)*runs} USD\n")
+    print(f"Max. Expected Costs: \n {(input_cost + max_output_cost)*runs} USD\n")
+
+    input("Press Enter to confirm...")
+    print("Starting to generate answers...")
+
     for model in settings["model_list"]:
         assert model in endpoint_list
         endpoint_info = endpoint_list[model]
 
-        question_file = os.path.join("data", settings["bench_name"], "question.jsonl")
-        questions = load_questions(question_file)
 
         answer_file = os.path.join("data", settings["bench_name"], "model_answer", f"{model}.jsonl")
         print(f"Output to {answer_file}")
