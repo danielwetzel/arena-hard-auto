@@ -190,7 +190,12 @@ if __name__ == "__main__":
                 tokens = tokenizer(question_list)
                 max_tokens = [(settings["max_tokens"] - len(prompt) - 300) for prompt in tokens["input_ids"]]
         else:
-            max_tokens = [settings["max_tokens"]] * len(questions)
+            # While using the Azure API, we need to specify the max_tokens for each question to increase the performance
+            print(settings["bench_name"])
+            if settings["bench_name"] == 'mt-bench':
+                max_tokens = [question["max_tokens"] for question in questions]
+            else:
+                max_tokens = [settings["max_tokens"]] * len(questions)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=parallel) as executor:
             futures = []

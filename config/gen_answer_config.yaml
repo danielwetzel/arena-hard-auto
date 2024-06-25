@@ -4,7 +4,7 @@ bench_name: mt-bench
 # arena-hard-v0.1
 
 temperature: 0.0
-max_tokens: 4096
+max_tokens: 1500
 num_choices: 1
 
 # a list of model to generate answers
