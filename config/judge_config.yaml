@@ -1,6 +1,7 @@
 name: judgment config file for Arena Hard
 
-bench_name: arena-hard-v0.1
+bench_name: mt-bench
+# arena-hard-v0.1
 
 # Arena Hard default
 judge_model: gpt-4o
