@@ -155,8 +155,8 @@ if __name__ == "__main__":
     print(f"Expected Output Tokens: \n {avg_output_tokens*runs} Tokens in a total of {num_questions*runs} questions\n")
     print(f"Max Output Tokens: \n {max_output_tokens*runs} Tokens in a total of {num_questions*runs} questions\n\n")
     print("-"*25 + "  Resulting in Costs:   " + "-"*25 + "\n")
-    print(f"Expected Costs: \n {(input_cost + avg_output_cost)*runs} USD\n")
-    print(f"Max. Expected Costs: \n {(input_cost + max_output_cost)*runs} USD\n")
+    print(f"Expected Costs: \n {(input_cost + avg_output_cost)*runs:.2f} USD\n")
+    print(f"Max. Expected Costs: \n {(input_cost + max_output_cost)*runs:.2f} USD\n")
 
     input("Press Enter to confirm...")
     print("Starting to generate answers...")

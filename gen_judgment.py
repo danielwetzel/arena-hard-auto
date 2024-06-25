@@ -4,6 +4,7 @@ import argparse
 import os
 import re
 import concurrent.futures
+import tiktoken
 
 from tqdm import tqdm
 
@@ -16,6 +17,7 @@ from utils import (
     load_model_answers,
     get_endpoint,
     make_config,
+    OPENAI_MODEL_LIST,
 )
 
 
@@ -169,6 +171,66 @@ if __name__ == "__main__":
     existing_judgments = load_model_answers(output_dir)
 
     endpoint_info = endpoint_list[configs["judge_model"]]
+
+    print("Estimating Costs...")
+
+    num_questions = len(questions)
+
+    if configs["judge_model"] in OPENAI_MODEL_LIST:
+        tokenizer = tiktoken.encoding_for_model(configs["judge_model"])
+    else: 
+        tokenizer = tiktoken.encoding_for_model("gpt-4")
+
+    num_games = 2 if configs["pairwise"] else 1
+    
+    system_prompt = configs["system_prompt"]
+    num_system_prompt_tokens = len(tokenizer.encode(system_prompt)*num_questions)
+
+    question_array = [question["turns"][0]["content"] for question in questions]
+    tokens = [tokenizer.encode(prompt) for prompt in question_array]
+    num_question_tokens = sum([len(token) for token in tokens])
+
+    # Based on the Number of Tokens for 1 Model Judgement with baseline (gpt-4-0613)
+    num_judge_tokens = 320000 if configs["baseline"] else 160000
+
+    num_answer_tokens = []
+    question_ids = [question["question_id"] for question in questions]
+
+    if configs["baseline"]:
+        baseline_answers = [model_answers[configs["baseline_model"]][question_id] for question_id in question_ids]
+        baseline_answers = [answer["choices"][0]["turns"][0]["content"] for answer in baseline_answers]
+        baseline_tokens = [tokenizer.encode(answer) for answer in baseline_answers]
+        num_baseline_tokens = sum([len(token) for token in baseline_tokens])
+
+    for model in models:
+        answers = [model_answers[model][question_id] for question_id in question_ids]
+        answers = [answer["choices"][0]["turns"][0]["content"] for answer in answers]
+        answer_tokens = [tokenizer.encode(answer) for answer in answers]
+        if configs["baseline"]:
+            num_answer_tokens.append(sum([len(token) for token in answer_tokens]) + num_baseline_tokens)
+        else:
+            num_answer_tokens.append(sum([len(token) for token in answer_tokens]))
+    
+    total_number_input_tokens = (num_question_tokens + num_system_prompt_tokens + sum(num_answer_tokens)) * num_games
+    total_number_output_tokens = num_judge_tokens * num_games
+
+    # gpt-4o rates
+    input_muliply = 0.005 / 1000
+    output_muliply = 0.015 / 1000
+
+    judge_input_cost = total_number_input_tokens * input_muliply
+    judge_output_cost = total_number_output_tokens * output_muliply
+
+    print("="*25 + "  Expected Costs (based on GPT-4o)  " + "="*25 + "\n")
+    print(f"Expected Input Tokens: \n {total_number_input_tokens} Tokens in a total of {num_questions*num_games} games\n")
+    print(f"Expected Output Tokens: \n {total_number_output_tokens} Tokens in a total of {num_questions*num_games} games\n")
+    print("-"*25 + "  Resulting in Costs:   " + "-"*25 + "\n")
+    print(f"Costs for Input Tokens: \n {judge_input_cost:.2f} USD   --   Costs for Output Tokens {judge_output_cost:.2f} USD\n")
+    print(f"Expected total Costs: \n {(judge_input_cost + judge_output_cost):.2f} USD\n")
+
+    input("Press Enter to confirm...")
+    print("Starting to generate judgement...")
+
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=endpoint_info["parallel"]) as executor:
         futures = []
