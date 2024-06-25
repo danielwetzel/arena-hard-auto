@@ -25,3 +25,19 @@ gpt-4-1106-preview:
     endpoints: null
     api_type: openai
     parallel: 8
+
+orca_8B: 
+    model_name: dwetzel/Llama-3-8B-Instruct_Orce_plus
+    endpoints: 
+        - api_base: http://0.0.0.0:8000
+          api_key: null
+    api_type: openai
+    parallel: 50
+
+llama_3_8B:
+    model_name: meta-llama/Meta-Llama-3-8B-Instruct
+    endpoints: 
+        - api_base: http://0.0.0.0:8000
+          api_key: null
+    api_type: openai
+    parallel: 50
