@@ -26,18 +26,35 @@ gpt-4-1106-preview:
     api_type: openai
     parallel: 8
 
+gpt-4o:
+    model_name: gpt-4o
+    endpoints: 
+         - api_base: EMPTY
+           api_key: EMPTY
+           api_version: 2024-02-01
+    api_type: azure
+    parallel: 15
+
 orca_8B: 
     model_name: dwetzel/Llama-3-8B-Instruct_Orce_plus
     endpoints: 
-        - api_base: http://0.0.0.0:8000
-          api_key: null
+        - api_base: http://localhost:8000/v1
+          api_key: EMPTY
     api_type: openai
-    parallel: 50
+    parallel: 200
 
 llama_3_8B:
     model_name: meta-llama/Meta-Llama-3-8B-Instruct
     endpoints: 
-        - api_base: http://0.0.0.0:8000
-          api_key: null
+        - api_base: http://localhost:8000/v1
+          api_key: EMPTY
     api_type: openai
-    parallel: 50
+    parallel: 200
+
+codestral-22B: 
+    model_name: mistralai/Codestral-22B-v0.1
+    endpoints: 
+        - api_base: http://localhost:8000/v1
+          api_key: EMPTY
+    api_type: openai
+    parallel: 200
