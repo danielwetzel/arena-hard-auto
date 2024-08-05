@@ -9,11 +9,11 @@ reference: False # Optional
 ref_model: null  
 
 baseline: True
-baseline_model: llama_3_8B
+baseline_model: gpt-4-0314
 
 pairwise: True
 temperature: 0
-max_tokens: 1500
+max_tokens: 2048
 
 regex_pattern: \[\[([AB<>=]+)\]\]
 number_of_judgment_attempts: 2
@@ -23,6 +23,8 @@ prompt_template: ["<|User Prompt|>\n{question_1}\n\n<|The Start of Assistant A's
 
 # Add your model below for evaluation
 model_list:
-  - orca_8B
-  #- llama_3_8B
-  #- codestral-22B
+  - gpt-4o
+  - gpt-3.5-turbo-0125
+  - llama3_1_70b
+  - llama3_1_70b_fp8
+  - llama3_1_70b_awq4
