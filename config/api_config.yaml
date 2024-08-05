@@ -58,3 +58,19 @@ codestral-22B:
           api_key: EMPTY
     api_type: openai
     parallel: 200
+
+llama3_1_70b:
+    model_name: llama3_1_70b
+    endpoints: 
+        - api_base: http://localhost:8000/v1
+          api_key: EMPTY
+    api_type: openai
+    parallel: 50
+
+llama3_1_70b_fp8:
+    model_name: llama3_1_70b_fp8
+    endpoints: 
+        - api_base: http://localhost:8000/v1
+          api_key: EMPTY
+    api_type: openai
+    parallel: 400

@@ -42,8 +42,13 @@ def get_answer(
 
     if "system_prompt" in endpoint_info.keys():
         conv.append({"role": "system", "content": endpoint_info["system_prompt"]})
-    elif model in OPENAI_MODEL_LIST:
-        conv.append({"role": "system", "content": "You are a helpful assistant."})
+    else:
+        system_prompt = f"""
+        You are a sophisticated AI-Expert there to help users solve tasks in several domains efficiently and accurately.
+        Now solve the following task from the domain "{question['cluster']}".\n
+        """
+        conv.append({"role": "system", "content": system_prompt})
+
 
     encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
     choices = []
@@ -112,6 +117,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--new-cost-estimation", action="store_true", help="Estimate the cost of the API call") 
+    parser.add_argument(
+        "--no-confirmation", action="store_true", help="Run the Test without the confirmation prompt") 
     args = parser.parse_args()
 
     settings = make_config(args.setting_file)
@@ -158,8 +165,11 @@ if __name__ == "__main__":
     print(f"Expected Costs: \n {(input_cost + avg_output_cost)*runs:.2f} USD\n")
     print(f"Max. Expected Costs: \n {(input_cost + max_output_cost)*runs:.2f} USD\n")
 
-    input("Press Enter to confirm...")
-    print("Starting to generate answers...")
+    if args.no_confirmation:
+        print("Starting to generate answers...")
+    else:
+        input("Press Enter to confirm...")
+        print("Starting to generate answers...")
 
     for model in settings["model_list"]:
         assert model in endpoint_list
