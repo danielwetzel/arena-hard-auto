@@ -33,7 +33,7 @@ gpt-4o:
            api_key: EMPTY
            api_version: 2024-02-01
     api_type: azure
-    parallel: 15
+    parallel: 20
 
 orca_8B: 
     model_name: dwetzel/Llama-3-8B-Instruct_Orce_plus
@@ -43,8 +43,16 @@ orca_8B:
     api_type: openai
     parallel: 200
 
-llama_3_8B:
-    model_name: meta-llama/Meta-Llama-3-8B-Instruct
+llama3_8b:
+    model_name: llama3_8b
+    endpoints: 
+        - api_base: http://localhost:8000/v1
+          api_key: EMPTY
+    api_type: openai
+    parallel: 200
+
+llama3_8b_fp8:
+    model_name: llama3_8b_fp8
     endpoints: 
         - api_base: http://localhost:8000/v1
           api_key: EMPTY
@@ -81,7 +89,15 @@ llama3_1_70b_fp8_1:
         - api_base: http://localhost:8000/v1
           api_key: EMPTY
     api_type: openai
-    parallel: 50
+    parallel: 25
+
+llama3_1_70b_fp8_2:
+    model_name: llama3_1_70b_fp8_2
+    endpoints: 
+        - api_base: http://localhost:8000/v1
+          api_key: EMPTY
+    api_type: openai
+    parallel: 35
 
 llama3_1_70b_awq_int4:
     model_name: llama3_1_70b_awq_int4
@@ -90,3 +106,27 @@ llama3_1_70b_awq_int4:
           api_key: EMPTY
     api_type: openai
     parallel: 100
+
+llama3_1_8b:
+    model_name: llama3_1_8b
+    endpoints: 
+        - api_base: http://localhost:8000/v1
+          api_key: EMPTY
+    api_type: openai
+    parallel: 200
+
+llama3_1_8b_fp8:
+    model_name: llama3_1_8b_fp8
+    endpoints: 
+        - api_base: http://localhost:8000/v1
+          api_key: EMPTY
+    api_type: openai
+    parallel: 200
+
+llama3_1_8b_awq_int4:
+    model_name: llama3_1_8b_awq_int4
+    endpoints: 
+        - api_base: http://localhost:8000/v1
+          api_key: EMPTY
+    api_type: openai
+    parallel: 200

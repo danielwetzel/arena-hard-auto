@@ -183,7 +183,7 @@ def get_battles_from_judgment(judge_name, first_game_only=False, WEIGHT=3, basel
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--bench-name", type=str, default="arena-hard-v0.1")
-    parser.add_argument("--judge-name", type=str, default="gpt-4-1106-preview")
+    parser.add_argument("--judge-name", type=str, default="gpt-4o")
     parser.add_argument("--baseline", type=str, default="gpt-4-0314")
     parser.add_argument("--load-battles", action="store_true")
     parser.add_argument("--load-bootstrap", action="store_true")
