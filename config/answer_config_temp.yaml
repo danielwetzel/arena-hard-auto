@@ -1,7 +1,7 @@
 bench_name: arena-hard-v0.1
 max_tokens: 2048
 model_list:
-- llama3_1_70b_awq4
-name: llama3_1_70b_awq4-arena-hard-v0.1-8gpus
+- llama3_1_70b_no_prompt_2
+name: llama3_1_70b_no_prompt_2-arena-hard-v0.1-8gpus
 num_choices: 1
 temperature: 0.0

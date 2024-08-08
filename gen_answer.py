@@ -40,14 +40,19 @@ def get_answer(
 
     conv = []
 
+
     if "system_prompt" in endpoint_info.keys():
-        conv.append({"role": "system", "content": endpoint_info["system_prompt"]})
-    else:
-        system_prompt = f"""
-        You are a sophisticated AI-Expert there to help users solve tasks in several domains efficiently and accurately.
-        Now solve the following task from the domain "{question['cluster']}".\n
-        """
-        conv.append({"role": "system", "content": system_prompt})
+        if endpoint_info["system_prompt"] == "cluster_info":
+            system_prompt = f"""
+            You are a sophisticated AI-Expert there to help users solve tasks in several domains efficiently and accurately.
+            Now solve the following task from the domain "{question['cluster']}".\n
+            """
+            conv.append({"role": "system", "content": system_prompt})
+        else:
+            conv.append({"role": "system", "content": endpoint_info["system_prompt"]})
+    elif model in OPENAI_MODEL_LIST:
+        conv.append({"role": "system", "content": "You are a helpful assistant."})
+        
 
 
     encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")

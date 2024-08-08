@@ -10,8 +10,4 @@ num_choices: 1
 
 # a list of model to generate answers
 model_list:
-  - llama3_1_70b
-#  - gpt-3.5-turbo-0125
-#  - gpt-4o
-#  - orca_8B
-#  - llama_3_8B
+  - gpt-4o
