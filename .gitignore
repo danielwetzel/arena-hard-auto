@@ -1,2 +1,3 @@
 config/api_config.yaml
 __pycache__/*
+.DS_Store
