@@ -33,6 +33,20 @@ gpt-4o:
            api_key: EMPTY
            api_version: 2024-02-01
     api_type: azure
+    parallel: 10
+    system_prompt: cluster_info
+
+gpt-4o-mini:
+    model_name: gpt-4o-mini
+    endpoints: null
+    api_type: openai
+    parallel: 20
+    system_prompt: cluster_info
+
+gpt-4o-2024-08-06:
+    model_name: gpt-4o-2024-08-06
+    endpoints: null
+    api_type: openai
     parallel: 20
     system_prompt: cluster_info
 
@@ -96,6 +110,15 @@ llama3_70b_no_prompt:
     api_type: openai
     parallel: 50
 
+llama3_70b:
+    model_name: llama3_70b
+    endpoints: 
+        - api_base: http://localhost:8000/v1
+          api_key: EMPTY
+    api_type: openai
+    system_prompt: cluster_info
+    parallel: 50
+
 llama3_1_70b_no_prompt:
     model_name: llama3_1_70b_no_prompt
     endpoints: 
@@ -135,6 +158,15 @@ llama3_70b_fp8_no_prompt:
         - api_base: http://localhost:8000/v1
           api_key: EMPTY
     api_type: openai
+    parallel: 100
+
+llama3_70b_fp8:
+    model_name: llama3_70b_fp8
+    endpoints: 
+        - api_base: http://localhost:8000/v1
+          api_key: EMPTY
+    api_type: openai
+    system_prompt: cluster_info
     parallel: 100
 
 llama3_1_70b_fp8_1:
@@ -178,6 +210,15 @@ llama3_70b_awq_int4_no_prompt:
         - api_base: http://localhost:8000/v1
           api_key: EMPTY
     api_type: openai
+    parallel: 100
+
+llama3_70b_awq_int4:
+    model_name: llama3_70b_awq_int4
+    endpoints: 
+        - api_base: http://localhost:8000/v1
+          api_key: EMPTY
+    api_type: openai
+    system_prompt: cluster_info
     parallel: 100
 
 llama3_1_8b:
@@ -230,3 +271,45 @@ llama3_1_8b_awq_int4_no_prompt:
           api_key: EMPTY
     api_type: openai
     parallel: 200
+
+llama3_1_405b:
+    model_name: meta.llama3-1-405b-instruct-v1:0
+    endpoints: 
+        - api_key: EMPTY
+          api_secret_key: EMPTY
+          aws_region: us-west-2
+    api_type: aws
+    model_type: llama-3.1
+    system_prompt: cluster_info
+    parallel: 10
+
+llama3_1_405b_no_prompt:
+    model_name: meta.llama3-1-405b-instruct-v1:0
+    endpoints: 
+        - api_key: EMPTY
+          api_secret_key: EMPTY
+          aws_region: us-west-2
+    api_type: aws
+    model_type: llama-3.1
+    parallel: 10
+
+mistral_large_2:
+    model_name: mistral.mistral-large-2407-v1:0
+    endpoints: 
+        - api_key: EMPTY
+          api_secret_key: EMPTY
+          aws_region: us-west-2
+    api_type: aws
+    model_type: mistral-large-2
+    system_prompt: cluster_info
+    parallel: 10
+
+mistral_large_2_no_prompt:
+    model_name: mistral.mistral-large-2407-v1:0
+    endpoints: 
+        - api_key: EMPTY
+          api_secret_key: EMPTY
+          aws_region: us-west-2
+    api_type: aws
+    model_type: mistral-large-2
+    parallel: 10
