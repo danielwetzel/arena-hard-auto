@@ -24,6 +24,7 @@ from utils import (
     chat_completion_mistral,
     http_completion_gemini,
     chat_completion_cohere,
+    chat_completion_awsbedrock,
     reorg_answer_file,
     OPENAI_MODEL_LIST,
     temperature_config,
@@ -87,6 +88,13 @@ def get_answer(
                                                 messages=conv,
                                                 temperature=temperature,
                                                 max_tokens=max_tokens)
+            elif api_type == "aws": 
+                output = chat_completion_awsbedrock(model=endpoint_info["model_name"],
+                                                      messages=conv,
+                                                      temperature=temperature,
+                                                      max_tokens=max_tokens,
+                                                      api_dict=api_dict, 
+                                                      api_info=endpoint_info)
             else:
                 output = chat_completion_openai(model=endpoint_info["model_name"], 
                                                 messages=conv, 

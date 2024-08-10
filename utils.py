@@ -322,6 +322,100 @@ def chat_completion_cohere(model, messages, temperature, max_tokens):
     return output
 
 
+def chat_completion_awsbedrock(model, messages, temperature, max_tokens, api_dict=None, api_info=None):
+    from transformers import  AutoTokenizer
+    import boto3
+    from botocore.exceptions import ClientError
+    from botocore.config import Config
+
+    if 'api_secret_key' in api_dict:
+        aws_key = api_dict["api_key"]
+        aws_secret_key = api_dict["api_secret_key"]
+    else:
+        aws_key = os.environ["AWS_KEY"]
+        aws_secret_key = os.environ["AWS_SECRET_KEY"]
+
+    if 'aws_region' in api_dict:
+        aws_region = api_dict["aws_region"]
+    else:
+        aws_region = 'us-west-2'
+
+    # Set the timeout for the Boto Client to 10 minutes - The default timeout raised "Read timeout" Exeptions for longer questions
+    boto_config = Config(read_timeout=600)
+
+    # initialize the bedrock runtime client
+    bedrock_runtime = boto3.client(service_name='bedrock-runtime', 
+                            region_name=aws_region, 
+                            aws_access_key_id=aws_key, 
+                            aws_secret_access_key=aws_secret_key, 
+                            config=boto_config)
+
+
+    # llama models in AWS Bedrock don't use a json-like chat template
+    if 'model_type' in api_info:
+        model_type = api_info["model_type"]
+    else: 
+        model_type = 'llama-3.1'
+    
+    # Llama Models Require the Prompt in one String
+    if 'llama' in model_type:
+        if model_type == 'llama-3.1':
+            tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3.1-405B-Instruct", padding_side="left")
+        elif model_type == 'llama-3':
+            tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3-70B-Instruct", padding_side="left")
+        else:
+            tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3-70B-Instruct", padding_side="left")
+
+        tokenizer.pad_token = tokenizer.bos_token
+        prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+
+        body = json.dumps({
+            "prompt": prompt,
+            "max_gen_len":max_tokens,
+            "temperature":temperature,
+            "top_p":0.8
+        })
+
+    # Claude Models Require the Anthropic Version
+    elif 'claude' in model_type:
+        if 'anthropic_version' in api_info:
+            anthropic_version = api_info["anthropic_version"]
+        else:
+            anthropic_version = 'bedrock-2023-05-31'
+
+        body = json.dumps({
+            "anthropic_version": anthropic_version,
+            "max_tokens": max_tokens,
+            "temperature":temperature,
+            "messages": messages
+        })
+    
+    # For a few of the other models there might be a different format as well. This needs to be checked
+    else: 
+        body = json.dumps({
+            "max_tokens": max_tokens,
+            "temperature":temperature,
+            "messages": messages
+        })
+
+    try:
+        response_json = bedrock_runtime.invoke_model(body=body, 
+                                            modelId=model, 
+                                            accept="application/json", 
+                                            contentType="application/json")
+
+        response = json.loads(response_json['body'].read())
+        output = response["generation"]
+
+    except (ClientError, Exception) as e:
+        error = f"ERROR: Can't invoke '{model}'. Reason: {e}"
+        print(error)
+        output = API_ERROR_OUTPUT
+
+    return output
+
+
+
 def reorg_answer_file(answer_file):
     """Sort by question id and de-duplication"""
     answers = {}
