@@ -376,6 +376,21 @@ def chat_completion_awsbedrock(model, messages, temperature, max_tokens, api_dic
             "top_p":0.8
         })
 
+        try:
+            response_json = bedrock_runtime.invoke_model(body=body, 
+                                                modelId=model, 
+                                                accept="application/json", 
+                                                contentType="application/json")
+
+            response = json.loads(response_json['body'].read())
+            output = response["generation"]
+
+        except (ClientError, Exception) as e:
+            error = f"ERROR: Can't invoke '{model}'. Reason: {e}"
+            print(error)
+            output = API_ERROR_OUTPUT
+
+
     # Claude Models Require the Anthropic Version
     elif 'claude' in model_type:
         if 'anthropic_version' in api_info:
@@ -389,6 +404,19 @@ def chat_completion_awsbedrock(model, messages, temperature, max_tokens, api_dic
             "temperature":temperature,
             "messages": messages
         })
+        try:
+            response_json = bedrock_runtime.invoke_model(body=body, 
+                                                modelId=model, 
+                                                accept="application/json", 
+                                                contentType="application/json")
+
+            response = json.loads(response_json['body'].read())
+            output = response['choices'][0]['message']['content']
+
+        except (ClientError, Exception) as e:
+            error = f"ERROR: Can't invoke '{model}'. Reason: {e}"
+            print(error)
+            output = API_ERROR_OUTPUT
     
     # For a few of the other models there might be a different format as well. This needs to be checked
     else: 
@@ -397,20 +425,20 @@ def chat_completion_awsbedrock(model, messages, temperature, max_tokens, api_dic
             "temperature":temperature,
             "messages": messages
         })
+        try:
+            response_json = bedrock_runtime.invoke_model(body=body, 
+                                                modelId=model, 
+                                                accept="application/json", 
+                                                contentType="application/json")
 
-    try:
-        response_json = bedrock_runtime.invoke_model(body=body, 
-                                            modelId=model, 
-                                            accept="application/json", 
-                                            contentType="application/json")
+            response = json.loads(response_json['body'].read())
+            output = response['choices'][0]['message']['content']
 
-        response = json.loads(response_json['body'].read())
-        output = response["generation"]
+        except (ClientError, Exception) as e:
+            error = f"ERROR: Can't invoke '{model}'. Reason: {e}"
+            print(error)
+            output = API_ERROR_OUTPUT
 
-    except (ClientError, Exception) as e:
-        error = f"ERROR: Can't invoke '{model}'. Reason: {e}"
-        print(error)
-        output = API_ERROR_OUTPUT
 
     return output
 
