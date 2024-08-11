@@ -154,8 +154,9 @@ if __name__ == "__main__":
     questions = load_questions(question_file)
 
     runs = len(settings["model_list"])
-    if settings["add_guidance"]:
-        runs *= 2  # Double the runs if guidance is added
+    if "add_guidance" in settings:
+        if settings["add_guidance"]:
+            runs *= 2  # Double the runs if guidance is added
 
     if args.new_cost_estimation:
         question_array = [question["turns"][0]["content"] for question in questions]
@@ -259,47 +260,47 @@ if __name__ == "__main__":
 
         reorg_answer_file(answer_file)
 
+        if "add_guidance" in settings:
+            if settings["add_guidance"]:
+                # Load guidance
+                guidance_data = {}
+                guidance_file = os.path.join("data", settings["bench_name"], "guidance.jsonl")
+                guidance_data = load_guidance(guidance_file)
 
-        if settings["add_guidance"]:
-            # Load guidance
-            guidance_data = {}
-            guidance_file = os.path.join("data", settings["bench_name"], "guidance.jsonl")
-            guidance_data = load_guidance(guidance_file)
+                guided_answer_file = os.path.join("data", settings["bench_name"], "model_answer", f"{model}_guided.jsonl")
 
-            guided_answer_file = os.path.join("data", settings["bench_name"], "model_answer", f"{model}_guided.jsonl")
+                print(f"Output to {guided_answer_file}")
 
-            print(f"Output to {guided_answer_file}")
+                with concurrent.futures.ThreadPoolExecutor(max_workers=parallel) as executor:
+                    futures = []
+                    count = 0
+                    for index, question in enumerate(questions):
+                        if f"{model}_guided" in existing_answer and question["question_id"] in existing_answer[f"{model}_guided"]:
+                            count += 1
+                            continue
+                        guidance = guidance_data.get(question["question_id"], None)
+                        if guidance is None:
+                            print(f"Guidance not found for question_id: {question['question_id']}")
+                            continue
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=parallel) as executor:
-                futures = []
-                count = 0
-                for index, question in enumerate(questions):
-                    if f"{model}_guided" in existing_answer and question["question_id"] in existing_answer[f"{model}_guided"]:
-                        count += 1
-                        continue
-                    guidance = guidance_data.get(question["question_id"], None)
-                    if guidance is None:
-                        print(f"Guidance not found for question_id: {question['question_id']}")
-                        continue
+                        future = executor.submit(
+                            get_answer,
+                            question,
+                            f"{model}_guided",
+                            endpoint_info,
+                            settings["num_choices"],
+                            max_tokens[index],
+                            settings["temperature"],
+                            guided_answer_file,
+                            get_endpoint(endpoint_info["endpoints"]),
+                            guidance=guidance
+                        )
+                        futures.append(future)
+                    if count > 0:
+                        print(f"{count} number of existing guided answers")
+                    for future in tqdm.tqdm(
+                        concurrent.futures.as_completed(futures), total=len(futures)
+                    ):
+                        future.result()
 
-                    future = executor.submit(
-                        get_answer,
-                        question,
-                        f"{model}_guided",
-                        endpoint_info,
-                        settings["num_choices"],
-                        max_tokens[index],
-                        settings["temperature"],
-                        guided_answer_file,
-                        get_endpoint(endpoint_info["endpoints"]),
-                        guidance=guidance
-                    )
-                    futures.append(future)
-                if count > 0:
-                    print(f"{count} number of existing guided answers")
-                for future in tqdm.tqdm(
-                    concurrent.futures.as_completed(futures), total=len(futures)
-                ):
-                    future.result()
-
-            reorg_answer_file(guided_answer_file)
+                reorg_answer_file(guided_answer_file)
