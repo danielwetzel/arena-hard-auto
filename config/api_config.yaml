@@ -33,7 +33,7 @@ gpt-4o:
            api_key: EMPTY
            api_version: 2024-02-01
     api_type: azure
-    parallel: 10
+    parallel: 8
     system_prompt: cluster_info
 
 gpt-4o-mini:
@@ -275,9 +275,9 @@ llama3_1_8b_awq_int4_no_prompt:
 llama3_1_405b:
     model_name: meta.llama3-1-405b-instruct-v1:0
     endpoints: 
-        - api_key: EMPTY
-          api_secret_key: EMPTY
-          aws_region: us-west-2
+        - aws_region: us-west-2
+        #   api_key: EMPTY
+        #   api_secret_key: EMPTY
     api_type: aws
     model_type: llama-3.1
     system_prompt: cluster_info
@@ -286,9 +286,9 @@ llama3_1_405b:
 llama3_1_405b_no_prompt:
     model_name: meta.llama3-1-405b-instruct-v1:0
     endpoints: 
-        - api_key: EMPTY
-          api_secret_key: EMPTY
-          aws_region: us-west-2
+        - aws_region: us-west-2
+        #   api_key: EMPTY
+        #   api_secret_key: EMPTY
     api_type: aws
     model_type: llama-3.1
     parallel: 10
@@ -296,9 +296,9 @@ llama3_1_405b_no_prompt:
 mistral_large_2:
     model_name: mistral.mistral-large-2407-v1:0
     endpoints: 
-        - api_key: EMPTY
-          api_secret_key: EMPTY
-          aws_region: us-west-2
+        - aws_region: us-west-2
+        #   api_key: EMPTY
+        #   api_secret_key: EMPTY
     api_type: aws
     model_type: mistral-large-2
     system_prompt: cluster_info
@@ -307,9 +307,9 @@ mistral_large_2:
 mistral_large_2_no_prompt:
     model_name: mistral.mistral-large-2407-v1:0
     endpoints: 
-        - api_key: EMPTY
-          api_secret_key: EMPTY
-          aws_region: us-west-2
+        - aws_region: us-west-2
+        #   api_key: EMPTY
+        #   api_secret_key: EMPTY
     api_type: aws
     model_type: mistral-large-2
     parallel: 10
