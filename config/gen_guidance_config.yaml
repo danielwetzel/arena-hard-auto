@@ -1,0 +1,25 @@
+benchmark_name: "arena-hard-v0.1"
+
+max_tokens: 4096
+temperature: 0.0
+
+guidance_model: gpt-4o
+ideal_model_id: gpt-4o
+
+system_prompt: "You are a sophisticated AI-Assistant there to help users solve tasks efficiently and accurately."
+
+prompt_template:
+  - |
+    Based on the following question and ideal answer, provide concise and structured guidance to help solve the task.
+    Do not reveal the solution directly but instead offer the necessary context, subtle hints, and a brief step-by-step plan that encourages thoughtful consideration without providing the answer outright.
+    
+    Question: {question}
+    
+    Ideal Answer: {ideal_answer}
+    
+    Please generate the following:
+    1. **Contextual Information**: Provide relevant background information necessary to understand the task without giving away the solution.
+    2. **Hints and Tips**: Offer subtle hints or tips that can guide the user toward the solution, without stating it explicitly.
+    3. **Step-by-Step Plan**: Provide a concise sequence of steps that the user can follow to approach and solve the task. Each step should lead logically to the next, but be brief and focused on guiding rather than solving.
+    4. **Encouragement for Reasoning**: Suggest that the user should consider each step carefully and think critically about each and every step.
+    5. **Additional Considerations**: Include any extra information that might be useful, such as common pitfalls to avoid or alternative methods to consider, but keep it brief.

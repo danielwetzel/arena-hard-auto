@@ -42,6 +42,15 @@ temperature_config = {
     "humanities": 0.1,
 }
 
+def load_guidance(guidance_file: str):
+    """Load guidance from a file."""
+    guidance = {}
+    with open(guidance_file, "r") as fin:
+        for line in fin:
+            if line:
+                line = json.loads(line)
+                guidance[line["question_id"]] = line
+    return guidance
 
 def load_questions(question_file: str):
     """Load questions from a file."""

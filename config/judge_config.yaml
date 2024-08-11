@@ -13,7 +13,7 @@ baseline_model: gpt-4-0314
 
 pairwise: True
 temperature: 0
-max_tokens: 2048
+max_tokens: 4096
 
 regex_pattern: \[\[([AB<>=]+)\]\]
 number_of_judgment_attempts: 2
@@ -24,16 +24,12 @@ prompt_template: ["<|User Prompt|>\n{question_1}\n\n<|The Start of Assistant A's
 # Add your model below for evaluation
 model_list:
   - gpt-4o
-  - gpt-4o_no_prompt
-  - llama-3.1-70b-instruct-compare
-  - llama3_1_70b_no_prompt  
-  - llama3_1_70b_fp8_no_prompt
-  - llama3_1_70b_awq_int4_no_prompt
-  - llama3_70b_no_prompt
-  - llama3_70b_awq_int4_no_prompt
-  - llama3_70b_fp8_no_prompt
-  # - gpt-4o
-  # - gpt-3.5-turbo-0125
+  - llama3_1_405b
   # - llama3_1_70b
   # - llama3_1_70b_fp8
-  # - llama3_1_70b_awq4
+  # - llama3_1_70b_awq_int4
+  - gpt-4o-2024-08-06
+  - gpt-4o-2024-08-06_guided
+  - gpt-4o-mini
+  - gpt-4o-mini_guided
+  - mistral_large_2

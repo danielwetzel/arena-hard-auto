@@ -15,6 +15,7 @@ import tqdm
 
 from utils import (
     load_questions,
+    load_guidance,
     load_model_answers,
     make_config,
     get_endpoint,
@@ -32,7 +33,7 @@ from utils import (
 
 
 def get_answer(
-    question: dict, model: str, endpoint_info: dict, num_choices: int, max_tokens: int, temperature: float, answer_file: str, api_dict: dict
+    question: dict, model: str, endpoint_info: dict, num_choices: int, max_tokens: int, temperature: float, answer_file: str, api_dict: dict, guidance=None
 ):
     if question["category"] in temperature_config:
         temperature = temperature_config[question["category"]]
@@ -41,20 +42,25 @@ def get_answer(
 
     conv = []
 
+    # System prompt adjustment for guidance
+    system_prompt = ""
+    if guidance:
+        system_prompt += f"""
+            You are a sophisticated AI assistant with the task to solve a question in the domain of {question['cluster']}. 
+            Here is important guidance to solve the task that will be given to you:\n{guidance}\n\n
+            Your task is:\n"""
 
     if "system_prompt" in endpoint_info.keys():
         if endpoint_info["system_prompt"] == "cluster_info":
-            system_prompt = f"""
+            system_prompt += f"""
             You are a sophisticated AI-Expert there to help users solve tasks in several domains efficiently and accurately.
             Now solve the following task from the domain "{question['cluster']}".\n
             """
-            conv.append({"role": "system", "content": system_prompt})
         else:
-            conv.append({"role": "system", "content": endpoint_info["system_prompt"]})
+            system_prompt += endpoint_info["system_prompt"]
+        conv.append({"role": "system", "content": system_prompt})
     elif model in OPENAI_MODEL_LIST:
         conv.append({"role": "system", "content": "You are a helpful assistant."})
-        
-
 
     encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
     choices = []
@@ -129,9 +135,11 @@ if __name__ == "__main__":
         "--endpoint-file", type=str, default="config/api_config.yaml"
     )
     parser.add_argument(
-        "--new-cost-estimation", action="store_true", help="Estimate the cost of the API call") 
+        "--new-cost-estimation", action="store_true", help="Estimate the cost of the API call"
+    )
     parser.add_argument(
-        "--no-confirmation", action="store_true", help="Run the Test without the confirmation prompt") 
+        "--no-confirmation", action="store_true", help="Run the Test without the confirmation prompt"
+    )
     args = parser.parse_args()
 
     settings = make_config(args.setting_file)
@@ -141,12 +149,13 @@ if __name__ == "__main__":
     
     print(settings)
 
-
     # Cost Estimation
     question_file = os.path.join("data", settings["bench_name"], "question.jsonl")
     questions = load_questions(question_file)
 
     runs = len(settings["model_list"])
+    if settings["add_guidance"]:
+        runs *= 2  # Double the runs if guidance is added
 
     if args.new_cost_estimation:
         question_array = [question["turns"][0]["content"] for question in questions]
@@ -159,16 +168,16 @@ if __name__ == "__main__":
         num_questions = 500
     
     # gpt-4o rates
-    input_muliply = 0.005 / 1000
-    output_muliply = 0.015 / 1000
+    input_multiply = 0.005 / 1000
+    output_multiply = 0.015 / 1000
 
     # based on the leaderboard data
-    avg_output_tokens = num_questions * 550 # AVG Answer Tokens
-    max_output_tokens = num_questions * 800 # based on the tokens for the other models 800 seems reasonable
+    avg_output_tokens = num_questions * 550  # AVG Answer Tokens
+    max_output_tokens = num_questions * 800  # based on the tokens for the other models 800 seems reasonable
 
-    input_cost = num_input_tokens * input_muliply
-    avg_output_cost = avg_output_tokens * output_muliply
-    max_output_cost = max_output_tokens * output_muliply
+    input_cost = num_input_tokens * input_multiply
+    avg_output_cost = avg_output_tokens * output_multiply
+    max_output_cost = max_output_tokens * output_multiply
 
     print("="*25 + "  Expected Costs (based on GPT-4o)  " + "="*25 + "\n")
     print(f"Expected Input Tokens: \n {num_input_tokens*runs} Tokens in a total of {num_questions*runs} questions\n")
@@ -182,13 +191,12 @@ if __name__ == "__main__":
         print("Starting to generate answers...")
     else:
         input("Press Enter to confirm...")
-        print("Starting to generate answers...")
 
     for model in settings["model_list"]:
         assert model in endpoint_list
         endpoint_info = endpoint_list[model]
 
-
+        # Normal run
         answer_file = os.path.join("data", settings["bench_name"], "model_answer", f"{model}.jsonl")
         print(f"Output to {answer_file}")
 
@@ -197,7 +205,7 @@ if __name__ == "__main__":
         else:
             parallel = 1
 
-        # We want to maximizes the number of tokens generate per answer: max_tokens = specified token # - input tokens #
+        # We want to maximize the number of tokens generated per answer: max_tokens = specified token # - input tokens #
         if "tokenizer" in endpoint_info:
             question_list = [question["turns"][0]["content"] for question in questions]
             if model in OPENAI_MODEL_LIST:
@@ -250,3 +258,48 @@ if __name__ == "__main__":
                 future.result()
 
         reorg_answer_file(answer_file)
+
+
+        if settings["add_guidance"]:
+            # Load guidance
+            guidance_data = {}
+            guidance_file = os.path.join("data", settings["bench_name"], "guidance.jsonl")
+            guidance_data = load_guidance(guidance_file)
+
+            guided_answer_file = os.path.join("data", settings["bench_name"], "model_answer", f"{model}_guided.jsonl")
+
+            print(f"Output to {guided_answer_file}")
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=parallel) as executor:
+                futures = []
+                count = 0
+                for index, question in enumerate(questions):
+                    if f"{model}_guided" in existing_answer and question["question_id"] in existing_answer[f"{model}_guided"]:
+                        count += 1
+                        continue
+                    guidance = guidance_data.get(question["question_id"], None)
+                    if guidance is None:
+                        print(f"Guidance not found for question_id: {question['question_id']}")
+                        continue
+
+                    future = executor.submit(
+                        get_answer,
+                        question,
+                        f"{model}_guided",
+                        endpoint_info,
+                        settings["num_choices"],
+                        max_tokens[index],
+                        settings["temperature"],
+                        guided_answer_file,
+                        get_endpoint(endpoint_info["endpoints"]),
+                        guidance=guidance
+                    )
+                    futures.append(future)
+                if count > 0:
+                    print(f"{count} number of existing guided answers")
+                for future in tqdm.tqdm(
+                    concurrent.futures.as_completed(futures), total=len(futures)
+                ):
+                    future.result()
+
+            reorg_answer_file(guided_answer_file)

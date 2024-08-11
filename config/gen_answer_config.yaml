@@ -8,8 +8,9 @@ temperature: 0.0
 max_tokens: 4096
 num_choices: 1
 
+add_guidance: True
+
 # a list of model to generate answers
 model_list:
   - gpt-4o-2024-08-06
   - gpt-4o-mini
-  - gpt-4o
