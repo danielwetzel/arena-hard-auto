@@ -1,8 +1,10 @@
 add_guidance: true
+answer_path: batched_model_answer/llama3_1_8b_guided
 bench_name: arena-hard-v0.1
+guidance_only: true
 max_tokens: 4096
 model_list:
-- llama3_1_405b
-name: llama3_1_405b-arena-hard-v0.1-0gpus
+- llama3_1_8b_guided_run_15
+name: llama3_1_8b_guided-arena-hard-v0.1-4gpus-run_15
 num_choices: 1
 temperature: 0.0

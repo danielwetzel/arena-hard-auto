@@ -84,6 +84,75 @@ def load_model_answers(answer_dir: str):
     return model_answers
 
 
+
+def prepare_batch_data(question, answer, reference, baseline_answer, configs, endpoint_dict):
+    batch_data = []
+
+    conv = [{"role": "system", "content": configs["system_prompt"]}]
+
+    for template in configs["prompt_template"]:
+        prompt_args = {}
+
+        for i, turn in enumerate(question["turns"]):
+            prompt_args[f"question_{i+1}"] = turn["content"]
+        base = 1
+
+        if baseline_answer and "choices" in baseline_answer and baseline_answer["choices"]:
+            for i, turn in enumerate(baseline_answer["choices"][0]["turns"]):
+                prompt_args[f"answer_{i+1}"] = turn["content"]
+                base += 1
+
+        if answer and "choices" in answer and answer["choices"]:
+            for i, turn in enumerate(answer["choices"][0]["turns"]):
+                prompt_args[f"answer_{i+base}"] = turn["content"]
+
+        if reference:
+            for j, ref_answer in enumerate(reference):
+                if "choices" in ref_answer and ref_answer["choices"]:
+                    for i, turn in enumerate(ref_answer["choices"][0]["turns"]):
+                        prompt_args[f"ref_answer_{i+j+1}"] = turn["content"]
+
+        user_prompt = template.format(**prompt_args)
+        conv.append({"role": "user", "content": user_prompt})
+
+    # Ensure the question has a valid question_id
+    if "question_id" not in question or not question["question_id"]:
+        raise ValueError(f"Question is missing a valid question_id: {question}")
+
+    batch_task = {
+        "custom_id": question["question_id"],  # Use question_id as custom_id
+        "method": "POST",
+        "url": "/chat/completions",
+        "body": {
+            "model": endpoint_dict["model_name"],
+            "messages": conv
+        }
+    }
+
+    batch_data.append(batch_task)
+    return batch_data
+
+
+
+def save_batch_result(result, output_file, questions):
+    question_id = result["custom_id"]
+    if question_id not in questions:
+        raise ValueError(f"Result refers to an unknown question_id: {question_id}")
+    
+    judgment = result["response"]["body"]["choices"][0]["message"]["content"]
+
+    # Save the result in the correct output file
+    output_entry = {
+        "question_id": question_id,
+        "judgment": judgment,
+        "tstamp": time.time()
+    }
+
+    with open(output_file, 'a') as f:
+        f.write(json.dumps(output_entry) + '\n')
+
+
+
 def get_endpoint(endpoint_list):
     if endpoint_list is None:
         return None
@@ -175,6 +244,65 @@ def chat_completion_openai_azure(model, messages, temperature, max_tokens, api_d
             break
 
     return output
+
+
+
+def chat_completion_openai_azure_batched(batch_file_name, api_dict):
+    from openai import AzureOpenAI
+    import time
+    import datetime
+    import json
+
+    client = AzureOpenAI(
+        azure_endpoint=api_dict["api_base"],
+        api_key=api_dict["api_key"],
+        api_version=api_dict["api_version"],
+    )
+
+    # Upload the batch file
+    file_response = client.files.create(
+        file=open(batch_file_name, "rb"),
+        purpose="batch"
+    )
+
+    
+    file_id = file_response.id
+
+    # Wait for the file to be processed
+    status = "pending"
+    while status != "processed":
+        time.sleep(15)
+        file_response = client.files.retrieve(file_id)
+        status = file_response.status
+        print(f"{datetime.datetime.now()} File Id: {file_id}, Status: {status}")
+
+    # Submit the batch job
+    batch_response = client.batches.create(
+        input_file_id=file_id,
+        endpoint="/chat/completions",
+        completion_window="24h",
+    )
+    batch_id = batch_response.id
+    print(f"Batch ID: {batch_id}")
+
+    # Track the batch job progress
+    status = "validating"
+    while status not in ("completed", "failed", "canceled"):
+        time.sleep(60)
+        batch_response = client.batches.retrieve(batch_id)
+        status = batch_response.status
+        print(f"{datetime.datetime.now()} Batch Id: {batch_id},  Status: {status}")
+
+    # Retrieve the output file
+    file_response = client.files.content(batch_response.output_file_id)
+    raw_responses = file_response.text.strip().split('\n')
+
+    batch_results = []
+    for raw_response in raw_responses:
+        json_response = json.loads(raw_response)
+        batch_results.append(json_response)
+
+    return batch_results
 
 
 def chat_completion_anthropic(model, messages, temperature, max_tokens, api_dict=None):

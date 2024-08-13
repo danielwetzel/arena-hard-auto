@@ -4,7 +4,7 @@ bench_name: arena-hard-v0.1
 #mt-bench
 
 # Arena Hard default
-judge_model: gpt-4o
+judge_model: gpt-4o-batch
 reference: False # Optional
 ref_model: null  
 
@@ -23,9 +23,4 @@ prompt_template: ["<|User Prompt|>\n{question_1}\n\n<|The Start of Assistant A's
 
 # Add your model below for evaluation
 model_list:
-  - llama3_1_70b_fp8_guided
-  - llama3_1_70b_awq_int4_guided
-  - llama3_70b
-  - llama3_70b_guided
-  - llama3_70b_fp8
-  - llama3_70b_awq_int4
+  - llama3_1_8b

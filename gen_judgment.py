@@ -9,9 +9,11 @@ import tiktoken
 from tqdm import tqdm
 
 from utils import (
-    load_questions,
+    prepare_batch_data,
+    save_batch_result,
     chat_completion_openai,
     chat_completion_openai_azure,
+    chat_completion_openai_azure_batched,
     chat_completion_anthropic,
     load_questions,
     load_model_answers,
@@ -45,6 +47,51 @@ def get_answer(model, conv, temperature, max_tokens, endpoint_dict=None):
     else:
         output = chat_completion_openai(model, conv, temperature, max_tokens, api_dict)
     return output
+
+
+
+def batch_judgement(models, questions, model_answers, ref_answers, configs, output_files, endpoint_info, args, pattern):
+    batch_data = []
+    for model in models:
+        for question in questions:
+            question_id = question["question_id"]
+            if question_id not in model_answers[model]:
+                print(f"Skipping question {question_id} for model {model} as answer is missing.")
+                continue
+
+            # Call prepare_batch_data with explicit arguments
+            tasks = prepare_batch_data(
+                question=question,
+                answer=model_answers[model].get(question_id),
+                reference=ref_answers,
+                baseline_answer=model_answers[configs["baseline_model"]].get(question_id) if configs["baseline"] else None,
+                configs=configs,
+                endpoint_dict=endpoint_info
+            )
+            
+            if tasks:
+                batch_data += tasks
+
+            if args.test_only:
+                break
+
+            if not batch_data:
+                raise ValueError("No batch data was prepared. Check if all necessary inputs are provided.")
+
+        # Write batch data to a file
+        batch_file_name = "azure_batch_input.jsonl"
+        with open(batch_file_name, 'w') as f:
+            for task in batch_data:
+                f.write(json.dumps(task) + '\n')
+
+        #print(endpoint_info["endpoints"][0])
+    
+        # Call the Azure batch processing function
+        batch_results = chat_completion_openai_azure_batched(batch_file_name, endpoint_info["endpoints"][0])
+
+        # Save results
+        for result in batch_results:
+            save_batch_result(result, output_files[model], questions)
 
 
 def judgment(**args):
@@ -130,6 +177,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--setting-file", type=str, default="config/judge_config.yaml")
     parser.add_argument("--endpoint-file", type=str, default="config/api_config.yaml")
+    parser.add_argument("--test-only", action="store_true", help="Process only one batch")
     args = parser.parse_args()
     print(args)
 
@@ -149,7 +197,6 @@ if __name__ == "__main__":
     questions = load_questions(question_file)
     model_answers = load_model_answers(answer_dir)
     
-    # if user choose a set of models, only judge those models
     models = [model for model in configs["model_list"]]
         
     ref_answers = None
@@ -214,16 +261,31 @@ if __name__ == "__main__":
     total_number_input_tokens = (num_question_tokens + num_system_prompt_tokens + sum(num_answer_tokens)) * num_games
     total_number_output_tokens = num_judge_tokens * num_games
 
-    # gpt-4o rates
-    input_muliply = 0.005 / 1000
-    output_muliply = 0.015 / 1000
+    if args.test_only:
+        batch_share = endpoint_info["parallel"] / num_questions
+    else: 
+        batch_share = 1
+
+    total_number_input_tokens = total_number_input_tokens * batch_share
+    total_number_output_tokens = total_number_output_tokens * batch_share
+
+
+    if endpoint_info["api_type"] == "azure_batched":
+        # bacth rates 
+        input_muliply = (0.005 / 1000) * 0.5
+        output_muliply = (0.015 / 1000) * 0.5
+
+    else:
+        # gpt-4o rates
+        input_muliply = 0.005 / 1000
+        output_muliply = 0.015 / 1000
 
     judge_input_cost = total_number_input_tokens * input_muliply
     judge_output_cost = total_number_output_tokens * output_muliply
 
     print("="*25 + "  Expected Costs (based on GPT-4o)  " + "="*25 + "\n")
-    print(f"Expected Input Tokens: \n {total_number_input_tokens} Tokens in a total of {num_questions*num_games} games\n")
-    print(f"Expected Output Tokens: \n {total_number_output_tokens} Tokens in a total of {num_questions*num_games} games\n")
+    print(f"Expected Input Tokens: \n {total_number_input_tokens} Tokens in a total of {int(num_questions * num_games * batch_share)} games\n")
+    print(f"Expected Output Tokens: \n {total_number_output_tokens} Tokens in a total of {int(num_questions * num_games * batch_share)} games\n")
     print("-"*25 + "  Resulting in Costs:   " + "-"*25 + "\n")
     print(f"Costs for Input Tokens: \n {judge_input_cost:.2f} USD   --   Costs for Output Tokens {judge_output_cost:.2f} USD\n")
     print(f"Expected total Costs: \n {(judge_input_cost + judge_output_cost):.2f} USD\n")
@@ -231,45 +293,47 @@ if __name__ == "__main__":
     input("Press Enter to confirm...")
     print("Starting to generate judgement...")
 
+    if endpoint_info["api_type"] == "azure_batched":
+        batch_judgement(models, questions, model_answers, ref_answers, configs, output_files, endpoint_info, args, pattern)
+    else:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=endpoint_info["parallel"]) as executor:
+            futures = []
+            for model in models:
+                count = 0
+                for question in questions:
+                    question_id = question["question_id"]
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=endpoint_info["parallel"]) as executor:
-        futures = []
-        for model in models:
-            count = 0
-            for question in questions:
-                question_id = question["question_id"]
+                    kwargs = {}
+                    kwargs["question"] = question
+                    if model in model_answers and not question_id in model_answers[model]:
+                        print(f"Warning: {model} answer to {question['question_id']} cannot be found.")
+                        continue
 
-                kwargs = {}
-                kwargs["question"] = question
-                if model in model_answers and not question_id in model_answers[model]:
-                    print(f"Warning: {model} answer to {question['question_id']} cannot be found.")
-                    continue
+                    if model in existing_judgments and question_id in existing_judgments[model]:
+                        count += 1
+                        continue
 
-                if model in existing_judgments and question_id in existing_judgments[model]:
-                    count += 1
-                    continue
+                    kwargs["answer"] = model_answers[model][question_id]
+                    if ref_answers:
+                        kwargs["reference"] = [ref_answer[question_id] for ref_answer in ref_answers]
+                        assert len(kwargs["reference"]) == len(configs["ref_model"])
+                    else:
+                        kwargs["reference"] = None
+                    if configs["baseline"]:
+                        kwargs["baseline_answer"] = model_answers[configs["baseline_model"]][question_id]
+                    else:
+                        kwargs["baseline_answer"] = None
+                    kwargs["configs"] = configs
+                    kwargs["endpoint_dict"] = endpoint_info
+                    kwargs["output_file"] = output_files[model]
+                    kwargs["regex_pattern"] = pattern
+                    future = executor.submit(judgment, **kwargs)
+                    futures.append(future)
 
-                kwargs["answer"] = model_answers[model][question_id]
-                if ref_answers:
-                    kwargs["reference"] = [ref_answer[question_id] for ref_answer in ref_answers]
-                    assert len(kwargs["reference"]) == len(configs["ref_model"])
-                else:
-                    kwargs["reference"] = None
-                if configs["baseline"]:
-                    kwargs["baseline_answer"] = model_answers[configs["baseline_model"]][question_id]
-                else:
-                    kwargs["baseline_answer"] = None
-                kwargs["configs"] = configs
-                kwargs["endpoint_dict"] = endpoint_info
-                kwargs["output_file"] = output_files[model]
-                kwargs["regex_pattern"] = pattern
-                future = executor.submit(judgment, **kwargs)
-                futures.append(future)
+                if count > 0:
+                    print(f"{count} number of existing judgments")
 
-            if count > 0:
-                print(f"{count} number of existing judgments")
-
-        for future in tqdm(
-            concurrent.futures.as_completed(futures), total=len(futures)
-        ):
-            future.result()
+            for future in tqdm(
+                concurrent.futures.as_completed(futures), total=len(futures)
+            ):
+                future.result()

@@ -153,9 +153,21 @@ if __name__ == "__main__":
     question_file = os.path.join("data", settings["bench_name"], "question.jsonl")
     questions = load_questions(question_file)
 
+    if "answer_path" in settings:
+        answer_path = settings["answer_path"]
+    else:
+        answer_path = "model_answer"
+
+    guidance_only = False
+
+    if "guidance_only" in settings:
+        if settings["guidance_only"]:
+            print("Guidance only mode")
+            guidance_only = True
+
     runs = len(settings["model_list"])
     if "add_guidance" in settings:
-        if settings["add_guidance"]:
+        if settings["add_guidance"] and not guidance_only:
             runs *= 2  # Double the runs if guidance is added
 
     if args.new_cost_estimation:
@@ -198,9 +210,8 @@ if __name__ == "__main__":
         endpoint_info = endpoint_list[model]
 
         # Normal run
-        answer_file = os.path.join("data", settings["bench_name"], "model_answer", f"{model}.jsonl")
-        print(f"Output to {answer_file}")
-
+        answer_file = os.path.join("data", settings["bench_name"], answer_path, f"{model}.jsonl")
+        
         if "parallel" in endpoint_info:
             parallel = endpoint_info["parallel"]
         else:
@@ -232,33 +243,38 @@ if __name__ == "__main__":
             else:
                 max_tokens = [settings["max_tokens"]] * len(questions)
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=parallel) as executor:
-            futures = []
-            count = 0
-            for index, question in enumerate(questions):
-                if model in existing_answer and question["question_id"] in existing_answer[model]:
-                    count += 1
-                    continue
-                future = executor.submit(
-                    get_answer,
-                    question,
-                    model,
-                    endpoint_info,
-                    settings["num_choices"],
-                    max_tokens[index],
-                    settings["temperature"],
-                    answer_file,
-                    get_endpoint(endpoint_info["endpoints"]),
-                )
-                futures.append(future)
-            if count > 0:
-                print(f"{count} number of existing answers")
-            for future in tqdm.tqdm(
-                concurrent.futures.as_completed(futures), total=len(futures)
-            ):
-                future.result()
+        # if guidance_only is True, we only generate the guided answers
+        if not guidance_only:
+            # Start normal run
+            print(f"Output to {answer_file}")
 
-        reorg_answer_file(answer_file)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=parallel) as executor:
+                futures = []
+                count = 0
+                for index, question in enumerate(questions):
+                    if model in existing_answer and question["question_id"] in existing_answer[model]:
+                        count += 1
+                        continue
+                    future = executor.submit(
+                        get_answer,
+                        question,
+                        model,
+                        endpoint_info,
+                        settings["num_choices"],
+                        max_tokens[index],
+                        settings["temperature"],
+                        answer_file,
+                        get_endpoint(endpoint_info["endpoints"]),
+                    )
+                    futures.append(future)
+                if count > 0:
+                    print(f"{count} number of existing answers")
+                for future in tqdm.tqdm(
+                    concurrent.futures.as_completed(futures), total=len(futures)
+                ):
+                    future.result()
+
+            reorg_answer_file(answer_file)
 
         if "add_guidance" in settings:
             if settings["add_guidance"]:
@@ -267,7 +283,7 @@ if __name__ == "__main__":
                 guidance_file = os.path.join("data", settings["bench_name"], "guidance.jsonl")
                 guidance_data = load_guidance(guidance_file)
 
-                guided_answer_file = os.path.join("data", settings["bench_name"], "model_answer", f"{model}_guided.jsonl")
+                guided_answer_file = os.path.join("data", settings["bench_name"], answer_path, f"{model}_guided.jsonl")
 
                 print(f"Output to {guided_answer_file}")
 
