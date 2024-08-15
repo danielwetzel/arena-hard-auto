@@ -23,7 +23,13 @@ prompt_template: ["<|User Prompt|>\n{question_1}\n\n<|The Start of Assistant A's
 
 # Add your model below for evaluation
 model_list:
-  - llama3_8b
+  - mistral_nemo_fp8_guided
+  - mistral_nemo_fp8
+  - mistral_nemo
+  - mistral_nemo_guided
+  - mistral_large_2_guided
+  - llama3_1_8b
+  - llama3_1_8b_guided
   # - llama3_70b
   # # - llama3_1_70b_fp8
   # - llama3_1_8b
