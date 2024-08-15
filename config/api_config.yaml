@@ -33,6 +33,16 @@ gpt-4o-batch:
            api_key: EMPTY
            api_version: 2024-07-01-preview
     api_type: azure_batched
+    parallel: 20  # This should reflect the number of prompts per batch
+    system_prompt: cluster_info
+
+gpt-4o-batch_2:
+    model_name: gpt-4o
+    endpoints: 
+         - api_base: EMPTY
+           api_key: EMPTY
+           api_version: 2024-02-01
+    api_type: azure
     parallel: 8  # This should reflect the number of prompts per batch
     system_prompt: cluster_info
 

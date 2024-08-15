@@ -42,6 +42,25 @@ temperature_config = {
     "humanities": 0.1,
 }
 
+
+def get_score(judgment, pattern, pairwise=True):
+    matches = pattern.findall(judgment)
+    matches = [m for m in matches if m != ""]
+    
+    if len(set(matches)) == 0:
+        #print(f"No valid match found in judgment")
+        return None, True
+    
+    elif len(set(matches)) == 1:
+        match = matches[0].strip("\n")
+        if pairwise:
+            return match, False
+        return int(match)
+    
+    else:
+        #print(f"Multiple distinct matches found in judgment")
+        return None, False
+
 def load_guidance(guidance_file: str):
     """Load guidance from a file."""
     guidance = {}
@@ -85,7 +104,7 @@ def load_model_answers(answer_dir: str):
 
 
 
-def prepare_batch_data(question, answer, reference, baseline_answer, configs, endpoint_dict):
+def prepare_batch_data(question, answer, reference, baseline_answer, configs, endpoint_dict, swap=False):
     batch_data = []
 
     conv = [{"role": "system", "content": configs["system_prompt"]}]
@@ -95,8 +114,8 @@ def prepare_batch_data(question, answer, reference, baseline_answer, configs, en
 
         for i, turn in enumerate(question["turns"]):
             prompt_args[f"question_{i+1}"] = turn["content"]
-        base = 1
 
+        base = 1
         if baseline_answer and "choices" in baseline_answer and baseline_answer["choices"]:
             for i, turn in enumerate(baseline_answer["choices"][0]["turns"]):
                 prompt_args[f"answer_{i+1}"] = turn["content"]
@@ -119,8 +138,12 @@ def prepare_batch_data(question, answer, reference, baseline_answer, configs, en
     if "question_id" not in question or not question["question_id"]:
         raise ValueError(f"Question is missing a valid question_id: {question}")
 
+    custom_id = question["question_id"]
+    if swap:
+        custom_id += "_swap"  # Append '_swap' to the custom_id for the swapped case
+
     batch_task = {
-        "custom_id": question["question_id"],  # Use question_id as custom_id
+        "custom_id": custom_id,  # Use question_id as custom_id
         "method": "POST",
         "url": "/chat/completions",
         "body": {
@@ -134,22 +157,82 @@ def prepare_batch_data(question, answer, reference, baseline_answer, configs, en
 
 
 
-def save_batch_result(result, output_file, questions):
-    question_id = result["custom_id"]
-    if question_id not in questions:
-        raise ValueError(f"Result refers to an unknown question_id: {question_id}")
-    
-    judgment = result["response"]["body"]["choices"][0]["message"]["content"]
+def process_and_clear_batch(batch_data, endpoint_info, output_file, questions, model, configs, pattern):
+    # Write batch data to a file
+    batch_file_name = "azure_batch_input.jsonl"
+    with open(batch_file_name, 'w') as f:
+        for task in batch_data:
+            f.write(json.dumps(task) + '\n')
 
-    # Save the result in the correct output file
-    output_entry = {
-        "question_id": question_id,
-        "judgment": judgment,
-        "tstamp": time.time()
-    }
+    # Call the Azure batch processing function
+    batch_results = chat_completion_openai_azure_batched(batch_file_name, endpoint_info["endpoints"][0])
 
+    # Save results
+    save_batch_results(batch_results, output_file, batch_data, model, configs, pattern)
+
+    # Delete the batch file after processing
+    os.remove(batch_file_name)
+
+
+
+def save_batch_results(results, output_file, batch_data, model, configs, pattern):
+    merged_results = {}
+    incomplete_questions = set()
+    written_items = 0
+
+    for idx, result in enumerate(results):
+        batch_id = result["custom_id"]
+        batch_item = batch_data[idx]
+        question_id = result["custom_id"].replace("_swap", "")
+        is_swapped = "_swap" in result["custom_id"]
+
+        system_prompt = batch_item["body"]["messages"][0]["content"]
+        user_prompt = batch_item["body"]["messages"][1]["content"]
+
+        judgment = result["response"]["body"]["choices"][0]["message"]["content"]
+        score, try_again = get_score(judgment, pattern)
+
+        # If the model judgment did not contain the regex pattern, skip this result
+        if try_again:
+            incomplete_questions.add(question_id)
+            #print(f"Skipping question {question_id} due to missing score in judgment.")
+            continue
+
+        game_result = {
+            "user_prompt": user_prompt,
+            "judgment": judgment,
+            "score": score
+        }
+
+        if question_id not in merged_results:
+            merged_results[question_id] = {
+                "question_id": question_id,
+                "model": model,
+                "judge": configs["judge_model"],
+                "games": [None, None]  # Initialize with two slots for the games
+            }
+
+        if is_swapped:
+            merged_results[question_id]["games"][1] = game_result
+        else:
+            merged_results[question_id]["games"][0] = game_result
+
+        # # If any question is incomplete, mark it for exclusion
+        # if any(game is None for game in merged_results[question_id]["games"]):
+        #     incomplete_questions.add(question_id)
+
+    # Write the merged results to the output file only if both games have valid results
     with open(output_file, 'a') as f:
-        f.write(json.dumps(output_entry) + '\n')
+        for question_id, result in merged_results.items():
+            # Exclude questions that are marked incomplete
+            if question_id not in incomplete_questions:
+                f.write(json.dumps(result, ensure_ascii=False) + '\n')
+                written_items += 1
+
+    if incomplete_questions:
+        print(f"Finished writing {written_items}! Skipped {len(incomplete_questions)} questions due to incomplete game results or failed regex matching.")
+    else: 
+        print(f"Finished writing {written_items}!")
 
 
 
@@ -265,16 +348,15 @@ def chat_completion_openai_azure_batched(batch_file_name, api_dict):
         purpose="batch"
     )
 
-    
     file_id = file_response.id
 
     # Wait for the file to be processed
     status = "pending"
     while status != "processed":
-        time.sleep(15)
+        time.sleep(2)  # Update every 2 seconds
         file_response = client.files.retrieve(file_id)
         status = file_response.status
-        print(f"{datetime.datetime.now()} File Id: {file_id}, Status: {status}")
+        print(f"\r{datetime.datetime.now()} Processing File Id: {file_id}, Status: {status}", end="")
 
     # Submit the batch job
     batch_response = client.batches.create(
@@ -283,15 +365,16 @@ def chat_completion_openai_azure_batched(batch_file_name, api_dict):
         completion_window="24h",
     )
     batch_id = batch_response.id
-    print(f"Batch ID: {batch_id}")
 
     # Track the batch job progress
     status = "validating"
     while status not in ("completed", "failed", "canceled"):
-        time.sleep(60)
+        time.sleep(2)  # Update every 2 seconds
         batch_response = client.batches.retrieve(batch_id)
         status = batch_response.status
-        print(f"{datetime.datetime.now()} Batch Id: {batch_id},  Status: {status}")
+        print(f"\r{datetime.datetime.now()} Waiting for Batch Id: {batch_id},  Status: {status}", end="")
+
+    print()
 
     # Retrieve the output file
     file_response = client.files.content(batch_response.output_file_id)

@@ -9,11 +9,11 @@ import tiktoken
 from tqdm import tqdm
 
 from utils import (
+    get_score,
     prepare_batch_data,
-    save_batch_result,
+    process_and_clear_batch,
     chat_completion_openai,
     chat_completion_openai_azure,
-    chat_completion_openai_azure_batched,
     chat_completion_anthropic,
     load_questions,
     load_model_answers,
@@ -21,19 +21,6 @@ from utils import (
     make_config,
     OPENAI_MODEL_LIST,
 )
-
-
-def get_score(judgment, pattern, pairwise=True):
-    matches = pattern.findall(judgment)
-    matches = [m for m in matches if m != ""]
-    if len(set(matches)) == 0:
-        return None, True
-    elif len(set(matches)) == 1:
-        if pairwise:
-            return matches[0].strip("\n"), False
-        return int(matches[0])
-    else:
-        return None, False
 
 
 # get answer from model
@@ -51,47 +38,93 @@ def get_answer(model, conv, temperature, max_tokens, endpoint_dict=None):
 
 
 def batch_judgement(models, questions, model_answers, ref_answers, configs, output_files, endpoint_info, args, pattern):
-    batch_data = []
+    batch_size = endpoint_info["parallel"]  # Number of items per batch as specified in the parallel field
+    num_games = 2 if configs["baseline"] else 1  # Determine if we need to run two games (for swapping)
+
     for model in models:
-        for question in questions:
-            question_id = question["question_id"]
-            if question_id not in model_answers[model]:
-                print(f"Skipping question {question_id} for model {model} as answer is missing.")
-                continue
 
-            # Call prepare_batch_data with explicit arguments
-            tasks = prepare_batch_data(
-                question=question,
-                answer=model_answers[model].get(question_id),
-                reference=ref_answers,
-                baseline_answer=model_answers[configs["baseline_model"]].get(question_id) if configs["baseline"] else None,
-                configs=configs,
-                endpoint_dict=endpoint_info
-            )
-            
-            if tasks:
-                batch_data += tasks
+        for _ in range(configs['number_of_judgment_attempts']):
 
-            if args.test_only:
-                break
+            # Filter out questions with existing judgments and missing answers
+            questions_to_process = []
+            existing_count = 0
+            total_questions = len(questions)
+            missing_answers = 0
 
-            if not batch_data:
-                raise ValueError("No batch data was prepared. Check if all necessary inputs are provided.")
+            existing_judgments = load_model_answers(output_dir)
 
-        # Write batch data to a file
-        batch_file_name = "azure_batch_input.jsonl"
-        with open(batch_file_name, 'w') as f:
-            for task in batch_data:
-                f.write(json.dumps(task) + '\n')
+            for question in questions:
+                question_id = question["question_id"]
+                if model in existing_judgments and question_id in existing_judgments[model]:
+                    existing_count += 1
+                elif question_id not in model_answers[model]:
+                    print(f"Skipping question {question_id} for model {model} because no answer was found.\n")
+                    missing_answers += 1
+                elif not args.test_only:
+                    questions_to_process.append(question)
+                else:
+                    if len(questions_to_process) < (batch_size/num_games):
+                        questions_to_process.append(question)
 
-        #print(endpoint_info["endpoints"][0])
-    
-        # Call the Azure batch processing function
-        batch_results = chat_completion_openai_azure_batched(batch_file_name, endpoint_info["endpoints"][0])
+            # Print summary of existing judgments and missing answers
+            print(f"Found {existing_count} / {total_questions} existing judgments for model {model} (Processed {num_games}x). Proceeding with {num_games}x {len(questions_to_process)} questions.\n")
+            if missing_answers > 0:
+                print(f"Skipped {missing_answers} questions due to missing answers for model {model}.\n")
 
-        # Save results
-        for result in batch_results:
-            save_batch_result(result, output_files[model], questions)
+            batch_data = []
+            batch_count = 0
+
+
+            for question in questions_to_process:
+                question_id = question["question_id"]
+
+                # Prepare batch data for the current question
+                tasks_original = prepare_batch_data(
+                    question=question,
+                    answer=model_answers[model].get(question_id),
+                    reference=ref_answers,
+                    baseline_answer=model_answers[configs["baseline_model"]].get(question_id) if configs["baseline"] else None,
+                    configs=configs,
+                    endpoint_dict=endpoint_info,
+                    swap=False  # No swapping for the first request
+                )
+
+                batch_data += tasks_original
+                batch_count += 1  # Increment by 1 for the original task
+
+                if configs["baseline"]:
+                    tasks_swapped = prepare_batch_data(
+                        question=question,
+                        answer=model_answers[configs["baseline_model"]].get(question_id),
+                        reference=ref_answers,
+                        baseline_answer=model_answers[model].get(question_id),
+                        configs=configs,
+                        endpoint_dict=endpoint_info,
+                        swap=True  # Swap for the second request
+                    )
+                    batch_data += tasks_swapped
+                    batch_count += 1  # Increment by 1 for the swapped task
+
+                if args.test_only and batch_count == batch_size:
+                    break
+
+                # If the batch is full, send it for processing
+                if batch_count >= batch_size:
+                    print(f"\rProcessing batch: {batch_count}/{batch_size} items\n", end="")
+                    process_and_clear_batch(batch_data, endpoint_info, output_files[model], questions, model, configs, pattern)
+                    batch_data = []
+                    batch_count = 0  # Reset the counter
+
+        # If there's any remaining data in the batch, process it
+        if batch_data:
+            print(f"\rProcessing final batch: {batch_count} items\n", end="")
+            process_and_clear_batch(batch_data, endpoint_info, output_files[model], questions, model, configs, pattern)
+            batch_data = []  # Clear remaining data after processing
+
+        if args.test_only:
+            break
+
+    print("\nAll batches processed.\n")
 
 
 def judgment(**args):
@@ -171,6 +204,7 @@ def judgment(**args):
 
     with open(output_file, "a") as f:
         f.write(json.dumps(output, ensure_ascii=False) + "\n")
+
 
 
 if __name__ == "__main__":
@@ -262,7 +296,7 @@ if __name__ == "__main__":
     total_number_output_tokens = num_judge_tokens * num_games
 
     if args.test_only:
-        batch_share = endpoint_info["parallel"] / num_questions
+        batch_share = endpoint_info["parallel"] / num_questions / num_games
     else: 
         batch_share = 1
 
@@ -291,7 +325,7 @@ if __name__ == "__main__":
     print(f"Expected total Costs: \n {(judge_input_cost + judge_output_cost):.2f} USD\n")
 
     input("Press Enter to confirm...")
-    print("Starting to generate judgement...")
+    print("Starting to generate judgement...\n\n")
 
     if endpoint_info["api_type"] == "azure_batched":
         batch_judgement(models, questions, model_answers, ref_answers, configs, output_files, endpoint_info, args, pattern)
