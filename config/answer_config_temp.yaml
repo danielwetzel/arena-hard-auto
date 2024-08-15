@@ -1,10 +1,10 @@
 add_guidance: true
-answer_path: batched_model_answer/llama3_1_8b_fp8_guided
+answer_path: batched_model_answer/mistral_nemo_fp8_guided
 bench_name: arena-hard-v0.1
 guidance_only: true
 max_tokens: 4096
 model_list:
-- llama3_1_8b_fp8_guided_run_1
-name: llama3_1_8b_fp8_guided-arena-hard-v0.1-4gpus-run_1
+- mistral_nemo_fp8_guided_run_3
+name: mistral_nemo_fp8_guided-arena-hard-v0.1-4gpus-run_3
 num_choices: 1
 temperature: 0.0
