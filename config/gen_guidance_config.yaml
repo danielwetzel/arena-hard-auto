@@ -6,16 +6,19 @@ temperature: 0.0
 guidance_model: gpt-4o
 ideal_model_id: gpt-4o
 
-system_prompt: "You are a sophisticated AI-Assistant there to help users solve tasks efficiently and accurately."
+system_prompt: 
+  - |
+    You are a sophisticated AI-Assistant there to help users solve tasks efficiently and accurately.
+    Based on the following question and ideal answer, provide concise and structured guidance to help solve the task.
+    Do not reveal the solution directly but instead offer the necessary context, subtle hints, and a brief step-by-step plan that encourages thoughtful consideration without providing the answer outright.
 
 prompt_template:
   - |
-    Based on the following question and ideal answer, provide concise and structured guidance to help solve the task.
-    Do not reveal the solution directly but instead offer the necessary context, subtle hints, and a brief step-by-step plan that encourages thoughtful consideration without providing the answer outright.
+    <|Question|> 
+    {question}
     
-    Question: {question}
-    
-    Ideal Answer: {ideal_answer}
+    <|Ideal Answer|>
+    {ideal_answer}
     
     Please generate the following:
     1. **Contextual Information**: Provide relevant background information necessary to understand the task without giving away the solution.
